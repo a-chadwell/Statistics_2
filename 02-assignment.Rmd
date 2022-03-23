@@ -1,0 +1,568 @@
+---
+title: "Assignment 2 - The backdoor criterion, regression, and matching"
+author: "213826"
+date: "`r format(Sys.time(), '%B %d, %Y | %H:%M:%S | %Z')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    highlight: tango
+    number_sections: no
+    theme: cosmo
+    toc: no
+---
+  
+<style>
+div.answer {background-color:#f3f0ff; border-radius: 5px; padding: 20px;}
+</style>
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      eval = TRUE,
+                      error = FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      comment = NA)
+```
+
+```{r, include=FALSE}
+# Custom function to install needed packages, if they're not
+# already installed on your machine
+check.packages <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE,
+                     repos = "https://cran.rstudio.com")
+  sapply(pkg, require, character.only = TRUE)
+}
+
+check.packages(c("tidyverse", "ggdag", "dagitty"))
+
+library(wooldridge)
+data(bwght)
+
+
+
+```
+
+
+<!-- Do not forget to input your Hertie student ID in the YAML configuration up there --> 
+
+***
+
+```{r, include=F}
+# YOU CAN ALSO LOAD THE PACKAGES YOU ARE USING IN THIS CODE CHUNK library(nameofpackage)
+```
+
+### Task 1 - Interpreting a Causal Graph [5 points in total]
+
+```{r echo = F, fig.align = "center", out.width="60%"}
+knitr::include_graphics("https://user-images.githubusercontent.com/54796579/157605872-87801784-4de3-4647-89ba-b3f06278ec6d.png")
+```
+
+a) Reproduce and plot this DAG using `ggdag`. Make sure to highlight the difference between observed and unobserved traits by changing the filling of the nodes. [1 point]
+
+```{r, fig.align="center"}
+
+coord_dag <- list(
+  x = c(P = 0, X = 1, D = 1, Z = 1, M = 2, U = 2, Y = 3),
+  y = c(P = 2, X = 0, D = 2, Z = 5, M = 3.1, U = 0, Y = 2)
+)
+
+
+dag1 <- ggdag::dagify(Y ~ Z + M + D + U,
+                          M ~ Z + D,
+                          D ~ Z + X,
+                          U ~ X,
+                          X ~ P,
+                          Z ~ P,
+                      coords = coord_dag,
+                      exposure = "D",
+                      outcome = "Y") 
+
+
+
+p <- ggdag::ggdag(dag1) + theme_dag()
+p$layers[[3]]$mapping <- 
+  aes(colour = c("Observed", "Unobserved")[as.numeric(name == "U") + 1])
+p + scale_color_manual(values = c("black", "#cc2055")) +
+  theme(legend.position = c(0.8, 0.8))
+
+```
+
+b) Say you are interested in determining the causal effect of **D** on **Y**. List all the paths (causal and non-causal) in this graph. [1 point]
+
+```{r}
+dagitty::paths(dag1)
+
+
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+D -> M -> Y
+
+D -> M <- Z -> Y 
+
+D -> M <- Z <- P -> X -> U -> Y
+
+D -> Y   
+
+D <- X -> U -> Y  
+
+D <- X <- P -> Z -> M -> Y  
+
+D <- X <- P -> Z -> Y   
+
+D <- Z -> M -> Y    
+
+D <- Z -> Y       
+
+D <- Z <- P -> X -> U -> Y     
+
+</div>
+
+c) What are the backdoor paths in this case? [1 point]
+
+```{r}
+dagitty::adjustmentSets(dag1)
+ggdag::ggdag_adjustment_set(dag1, shadow = T) +
+  theme_dag()
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+D -> M <- Z -> Y 
+
+D -> M <- Z <- P -> X -> U -> Y
+
+D <- X -> U -> Y  
+
+D <- X <- P -> Z -> M -> Y  
+
+D <- X <- P -> Z -> Y   
+
+D <- Z -> M -> Y    
+
+D <- Z -> Y       
+
+D <- Z <- P -> X -> U -> Y  
+
+</div>
+
+d) Which of these variables could you condition on to satisfy the backdoor criterion? [1 point]
+
+```{r}
+
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+X and Z should be conditioned on to satisfy the backdoor criteria. 
+
+</div>
+
+e) Now, let's assume that you could observe **U**. Would this affect the validity of your solution in (c)? Would there be an alternative solution? [1 point]
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+If we can observe "U", then we have the ability to control for U. This would not affect the validity of our solution in c because if we only control for U it will there will still be a backdoor path through D <- X -> U -> Y because we do not control X. 
+
+</div>
+
+---
+
+### Task 2 - Smoking behavior and infant birth weight [4 points in total]
+
+For this exercise you will use the `bwght` dataset from the `wooldridge` package.\footnote{The `bwght` dataset is already loaded in the first R chunk of this file. You will need to run the code requiring the `wooldridge` package (`library(wooldridge)`) and call the data (`data(bwght)`) to work with it.} The data come from the 1988 US National Health Interview Survey and contains information of maternal smoking behavior, infant birth weight, and additional social and economic markers.\footnote{To see what additional information is in the dataset, you can type `?bwght` in your R console.}
+
+a)  Estimate the following model: $bwght = \beta_0 + \beta_1cigs + \beta_2 male$ [0.5 points]
+
+```{r}
+ #for multiple regression
+
+reg1 <- lm(bwght ~ cigs + male, data = bwght)
+
+
+
+stargazer::stargazer(reg1, type = "text")
+```
+
+b) What is the estimated change in birth weight for any 20 more cigarettes smoked per day while pregnant, adjusting for the gender of the baby? [0.5 points]
+
+```{r}
+
+predict(reg1, newdata = data.frame(cigs = 20, male = 1)) - predict(reg1, newdata = data.frame(cigs = 0, male =0))
+predict(reg1, newdata = data.frame(cigs = 20, male = 0)) - predict(reg1, newdata = data.frame(cigs = 0, male = 0))
+
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+The estimated change in birth weight for any 20 more cigarettes smoked per day while pregnant for a male child is -7.33369 ounces. 
+
+The estimated change in birth weight for any 20 more cigarettes smoked per day while pregnant for a female child is -10.27303 ounces. 
+</div>
+
+
+c) What is the estimated birth weight for a baby girl with a mother that smoked 15 cigarettes per day while pregnant? [0.5 points]
+
+```{r}
+
+predict(reg1, newdata = data.frame(cigs = 15, male = 0))
+
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+The estimated birth weight for a baby girl with a mother that smoked 15 cigarettes per day while pregnant is 110.5358 ounces. 
+
+</div>
+
+
+d) What percentage of the variation in birth weight is explained by gender of baby and cigarette consumption? [0.5 points]
+
+```{r}
+
+summary(reg1)$r.squared
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+0.02793742
+
+The gender of the baby and the cigarette consumption explain 2.79% of the variation in birthweight. This number refers to the r^2 of the regression. 
+</div>
+
+
+e) Now extend the model by adding more covariates. **If your goal were to estimate the causal effect of cigs on bwght**, which additional covariates would you include? Please, justify your choice and explain any potential differences you find between the new $\hat\beta_1$ and the $old\ \hat\beta_1$. [2 points]
+
+```{r}
+
+reg2 <- lm(bwght ~ cigs + male + faminc + motheduc, data = bwght)
+
+
+stargazer::stargazer(reg2, type = "text")
+
+
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+The additional covariates I would include are family income (faminc) and mother's years of education (motheduc). 
+- Family income may effect the amount of disposable income a mother has to spend on cigarettes. Additionally, smoking disproportionate affects the health and wellbeing of people in lower economic groups, therefore it is important to control for family income while assessing the impact of cigs on birthweight.
+- Mothers education should be added to the model because higher education levels may make a mother aware of the dangers of smoking while pregnant. In this US specific example, anti-smoking campaigns were popular during the late 1980s in public schools, so therefore more years of school may have led to more exposure of these anti-smoking campaigns. 
+
+The more detailed mode specification only affects the outcome of the regression slightly. The cigs smoked per day has a slightly less negative impact on the baby's birthweight, while gender has a slightly higher positive impact. Family income has a slightly positive impact on the baby's birthweight and is statistically significant at the 99.9th%. Mother's income are not significantly significant for this model. Therefore, adding the control variables shows that cigs have slightly less impact than understood without the controls. Additonally, the constant has decreased, while the standard error of the constant has increased. 
+
+</div>
+
+---
+
+### Task 3 - The consequences of child soldiering [7 points in total]
+
+In this problem you will analyze the data in the `child_soldiering.csv` file. The data come from the Blattman and Annan (2010) article *The Consequences of Child Soldiering*. The authors are interested in the impact of abduction by the Lord’s Resistance Army on political, economic, and psychological outcomes. The data are from a survey of male youth in war-affected regions of Uganda. We will focus on the effect of abduction, which appears in the data as `abd`, on years of education, `educ`. Other variables in the data are:
+
++ `C.ach`, `C.*`, etc.: sub-district identifiers
++ `age`: respondent’s age in years
++ `fthr.ed`: father’s education (years)
++ `mthr.ed`: mother’s education (years)
++ `orphan96`: indicator for whether parents died before 1997
++ `fthr.frm`: indicator for whether father is a farmer
++ `hh.size96`: household size in 1996
+
+
+a) Check the covariate balance in the unmatched dataset. Your output should be in a well-formatted balance table in HTML form. Based on your table, which of the observed covariates seem to be the most important factors driving selection into abduction? [1 point]
+
+```{r}
+childsoildering <- read.csv("/Users/annachadwell/Desktop/Hertie/Stats II/02-assignment/child_soldiering.csv")
+
+t.test(educ ~ abd, data = childsoildering)
+
+# create a list with the covariates
+list_cov <- c("C.ach", "C.akw", "C.ata", "C.kma", "C.oro", "C.pad", "C.paj",
+              "C.pal", "age", "fthr.ed", "mthr.ed", "orphan96", "fthr.frm",
+              "hh.size96") 
+
+
+childsoildering %>% # our data frame
+  dplyr::summarize_at(list_cov, funs(list(broom::tidy(t.test(. ~ abd))))) %>% # sequentially run t-tests across all the covariates in the list_cov (note that you have to change the "treatment")
+  purrr::map(1) %>% # maps into a list
+  dplyr::bind_rows(.id='variables') %>% # binds list into a single data frame and names the id column "variables" 
+  dplyr::select(variables, estimate1, estimate2, p.value) %>% # select only the names, group means, and p-values
+  dplyr::mutate_if(is.numeric, round, 3) %>% # round numeric variables to three places
+  knitr::kable(col.names = c("Variable", "Control (Abduction = 0)", "Treat (Abduction = 1)", "P value")) %>% # create kable table and rename headings
+  kableExtra::kable_styling() # style kable table for our knitted document
+
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+The covariates that are the most important factors are in general the variables with the lowest p-value, which indicates that they are statistically significant. This implies that the difference in means is relatively large, implying the treatment has a strong effect on the outcome variable of the group. 
+
+The covariates I find to be the most factors driving selection in abduction are: 
+
+C.oro
+
+C.ata
+
+C.akw
+
+age
+
+
+The covaraites that are almost relevant are the following. They are indicated as almost relevant because they are slightly above a p-value 5%, while the standard is 5% or below. This means that in almost 6% of the cases the difference in the means were due to chance. 
+
+hh.size96 (5.8%)
+
+C.paj (5.5%)
+
+</div>
+
+b) Using a difference-in-means estimator, gather the naive average treatment effect (NATE) of abduction on education. [1 point]
+
+```{r}
+
+t.test(educ ~ abd, data = childsoildering)
+
+
+6.820346 - 7.415771   
+
+lm(educ ~ abd, data = childsoildering) %>% 
+  stargazer::stargazer(.,type = "text")
+
+```
+
+c) Now consider the authors’ description of abduction:
+
+_Abduction was large-scale and seemingly indiscriminate; 60,000 to 80,000 youth are estimated to have been abducted and more than a quarter of males currently aged 14 to 30 in our study region were abducted for at least two weeks. Most were abducted after 1996 and from one of the Acholi districts of Gulu, Kitgum, and Pader._
+
+_Youth were typically taken by roving groups of 10 to 20 rebels during night raids on rural homes. Adolescent males appear to have been the most pliable, reliable and effective forced recruits, and so were disproportionately targeted by the LRA. Youth under age 11 and over 24 tended to be avoided and had a high probability of immediate release._
+
+Given this description and what you found in **b)**, choose some covariates on which to perform an exact match, and then do so. Report an estimate of the average effect of abduction on education. [1 point]
+
+```{r}
+
+match_data <- childsoildering %>% 
+  dplyr::select(abd, educ, age, fthr.frm) %>% 
+  na.omit()
+
+
+
+exact_match <- MatchIt::matchit(abd ~ age + fthr.frm,
+                                method = "exact", 
+                                data = match_data)
+
+matched_child_soldiers <- MatchIt::match.data(exact_match)
+
+
+exact_match_model <- lm(educ ~ abd, data = matched_child_soldiers)
+  
+stargazer::stargazer(exact_match_model, type = "text")
+
+```
+
+d) Specify a logit model to generate the propensity scores, show the output of the model, and provide a plot that compares the distribution of the propensity scores for the treated and untreated units (before matching) in one panel. [1 point]
+
+```{r}
+
+# estimate logit model
+m_ps <- glm(abd ~ age + fthr.frm,
+            family = binomial(link = "logit"),
+            data = childsoildering)
+
+prs_df <- dplyr::tibble(pr_score = predict(m_ps, type = "response"),
+                     abd = m_ps$model$abd)
+
+#Density plot
+ggplot(prs_df, aes(x = pr_score, fill = factor(abd))) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Propensity Score Distribution: Treatment and Control Groups",
+       x = "Propensity Score",
+       y = "Density",
+       fill = "Children (not) being abducted") 
+
+#plot Jittered point plot
+ggplot(prs_df, aes(x = pr_score, y = factor(abd), color = factor(abd))) +
+  geom_jitter() +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Propensity Score Distribution: Treatment and Control Groups",
+       x = "Propensity Score",
+       y = "Group",
+       color = "Children (not) being abducted")
+
+
+```
+
+
+e) Use the `MatchIt` package to implement propensity score matching. Use the nearest neighbor method, and use 1:1 matching by setting the ratio to 1; otherwise use the default settings. Use the matched sample generated by the algorithm to i) produce a balance table, ii) estimate on abduction. [2 points]
+
+```{r}
+
+
+# create a list with the covariates
+list_cov1 <- c("age", "fthr.ed") 
+
+
+childsoildering %>% # our data frame
+  dplyr::summarize_at(list_cov1, funs(list(broom::tidy(t.test(. ~ abd))))) %>% # sequentially run t-tests across all the covariates in the list_cov (note that you have to change the "treatment")
+  purrr::map(1) %>% # maps into a list
+  dplyr::bind_rows(.id='variables') %>% # binds list into a single data frame and names the id column "variables" 
+  dplyr::select(variables, estimate1, estimate2, p.value) %>% # select only the names, group means, and p-values
+  dplyr::mutate_if(is.numeric, round, 3) %>% # round numeric variables to three places
+  knitr::kable(col.names = c("Variable", "Control (Abduction = 0)", "Treat (Abduction = 1)", "P value")) %>% # create kable table and rename headings
+  kableExtra::kable_styling() # style kable table for our knitted document
+
+
+
+
+
+match_process <- MatchIt::matchit(abd ~ age + fthr.frm, data = childsoildering)
+matched_df <- MatchIt::get_matches(match_process)
+matched_df <- MatchIt::match.data(match_process)
+matched_model <- lm(educ ~ abd, data = matched_df)
+stargazer::stargazer(matched_model, type = "text")
+
+
+
+
+```
+
+
+f) Use a package that renders well-formatted regression tables (i.e. `modelsummary`, `stargazer`, `texreg`) to print the three models you have. How do your findings compare on the a) naive, b) exact matched, and c) propensity score models? [1 point]
+
+```{r}
+
+#NAIVE model from b)
+model_1 <- lm(educ ~ abd, data = childsoildering)
+
+  
+#Exact model from c)
+model_2 <- exact_match_model <- lm(educ ~ abd, data = matched_child_soldiers)
+
+
+#Propensity score model from e)
+model_3 <- matched_model <- lm(educ ~ abd, data = matched_df)
+
+  stargazer::stargazer(model_1, model_2, model_3, type = "text")
+
+
+```
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+Looking at the three different models we can note some important differences, but also similarities. 
+
+In the NAIVE model, being abducted has a negative impact on education of -.595 units. This value is statistically significant at 99.9th percentile. Additionally the constant is 7.416, and the adjusted R-squared is 0.009
+
+In the exact-matching model abduction also negatively impacts years of education at -0.578 units. This value is statistically significant at 99.9th percentile. Additionally the constant is 7.373, and the adjusted R-squared is 0.008.
+
+In the propensity score matching model abduction also negatively impacts years of education at  -0.624 units.This value is statistically significant at 95th percentile. Additionally the constant is 7.416, and the adjusted R-squared is 0.009.
+
+We can see that between the NAIVE and exact matching models, the impact of abduction on education is very similar. However the constant is not the same- the constant is equal between the NAIVE and PS matching models. Additionally, the impact of abduction on education is greater in the propensity score matching. Finally the R squared for each model is almost equal. 
+</div>
+
+---
+
+### Task 4 - One more causal graph and simulation [5 points in total]
+
+A group of university administrators want to know the causal effect of a newly established math refresher workshop on incoming economics students' final grades. Given time constraints, attendance to the workshop was voluntary. Faculty members raise the following concern: If the university administration were to look at the observed difference in outcomes between those who attended and those who did not, they may gather biased results. Some faculty members argue that this relationship may be confounded by latent traits of students, such as motivation. The university administrators are not convinced about the concerns of the faculty. They argue that this is how they have always done things and it works. 
+
+
+a) Simulate a data frame that reflects a relationship where attending the course and students' grades are a function of a binary motivation marker — i.e., a confounder structure. Print the first ten observations of the dataset and provide the correlation matrix of all variables. [2 points]
+
+```{r}
+
+set.seed(12345)
+# create dataframe with variables
+df <- data.frame(workshop = round(runif(30, min=0, max=1)), 
+                  scores = round(runif(30, min=0, max=100)), 
+                  motivation = round(runif(30, min=0, max=1)))
+head(df, n=10)
+
+
+cor(df)
+```
+
+b) Run two regressions a) `naive_model`: a naive regression and b) `true_model` a regression that reflects the true model of your data generation process controlling for the confounder. Present the results side-by-side in a well-formatted regression table. [1 point]
+
+```{r}
+naive_model <- lm(scores ~ workshop, data = df)
+
+true_model <- lm(scores ~ workshop + motivation, data = df)
+
+stargazer::stargazer(naive_model, true_model, type = "text")
+
+
+
+```
+
+c) Present a graphic illustration of how the confounder could bias the results that the administrators may encounter based on your simulated data frame. [1 point]
+
+```{r, fig.align='center'}
+
+coord_dag1 <- list(
+  x = c(attendence = 0, grades = 2, motivation = 1),
+  y = c(attendence = 0, grades = 0, motivation = 2)
+)
+
+dag2 <- ggdag::dagify(attendance ~ motivation,
+                      grades ~ motivation,
+                                grades ~ attendance,
+                                labels = c("grades" = "Grades", 
+                                           "attendance" = "Workshop\n Attendance",
+                                           "motivation" = "Motivation",
+                                           coords = coord_dag1))
+
+ggdag::ggdag(dag2, # the dag object we created
+             text = FALSE, # this means the original names won't be shown
+             use_labels = "label") + # instead use the new names
+  theme_void()
+
+
+```
+
+d) Some faculty members suggest that since motivation is not an easily measurable trait, administrators could randomize who gets the workshop to gather the causal effect. Discuss if you agree with the faculty members' claim and elaborate on why this would, or not, be true. [1 point]
+
+<!-- DO NOT FORGET TO PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+If we were to randomize  who gets the workshop and who does not it would improve gathering the causal effect, as it reduces selection bias. Also, it would add an element of exogeneity. 
+
+If we were to randomize who must attend the workshop then it would avoid some level of selection bias, because even students that were not identified as "motivated" would attend. On the other hand given that the workshop is voluntary, students motivation will still influence whether or not they attend the workshop or not, due to never-takers and always takers. 
+</div>
+
+---
+
+### Task 5 - Statistics inspired meme [1 bonus percentage point]
+
+a)  Create a stats-inspired meme using `memer` (or any other R meme dedicated  package) to earn one bonus percentage point. The meme should be related to one of the topics covered in the sessions this assignment is based on.
+
+```{r}
+
+library(memer)
+meme_get("OneDoesNotSimply") %>% 
+  meme_text_top("One does not simply", size = 28) %>% 
+  meme_text_bottom("find their exact match", size = 26)
+
+
+```
