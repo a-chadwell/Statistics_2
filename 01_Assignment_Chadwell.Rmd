@@ -1,0 +1,77 @@
+---
+title: "Assignment 1 Stats 2"
+author: '213826'
+date: "3/1/2022"
+output: html_document
+---
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+
+# Load packages
+
+Echo=FALSE
+
+library(tidyverse) # To use dplyr functions and the pipe operator when needed
+library(ggplot2) # To visualize data (this package is also loaded by library(tidyverse))
+library(ggdag) # To create our DAGs
+
+
+
+```{r}
+#a)
+
+#Naive Average Treatment Effect
+NATE <- 95-88
+
+NATE = 7
+
+#Average Treatment Effect (ATE)
+
+#ATE=E(Y1i)−E(Y0i)
+
+ATE <- .5*2- (1-.5)*4
+
+ATE = -1
+
+
+#Average Treatment Effect on the treated (ATT)
+
+ATT <- 95-93
+
+ATT = 2
+
+#Average Treatment Effect on the control 
+
+ATC <- 92-88
+
+ATC = 4
+
+
+#Selection/Baseline bias 
+
+#E[Y0|D=1]- E[Y0|D=0]
+
+SB<- 93-88
+
+SB= 5
+
+#Heterogeneous Treatment Effect 
+
+#(1-π)(ATT-ATC)
+
+HTE <- (1-.5)*(2-4)
+
+HTE = -1
+
+```
