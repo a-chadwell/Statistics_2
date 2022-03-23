@@ -1,0 +1,350 @@
+---
+title: "Assignment 1 - The Potential Outcomes Framework and DAGs"
+author: "213826"
+date: "`r format(Sys.time(), '%B %d, %Y | %H:%M:%S | %Z')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    highlight: tango
+    number_sections: no
+    theme: cosmo
+    toc: no
+  pdf_document:
+    toc: no
+---
+  
+<style>
+div.answer {background-color:#f3f0ff; border-radius: 5px; padding: 20px;}
+</style>
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      eval = TRUE,
+                      error = FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      comment = NA)
+```
+
+```{r, include=FALSE}
+# Custom function to install needed packages, if they're not
+# already installed on your machine
+check.packages <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE,
+                     repos = "https://cran.rstudio.com")
+  sapply(pkg, require, character.only = TRUE)
+}
+
+check.packages(c("tidyverse", "ggdag", "dagitty"))
+```
+
+
+<!-- Do not forget to input your Github username in the YAML configuration up there --> 
+
+***
+
+```{r, include=F}
+# YOU CAN ALSO LOAD THE PACKAGES YOU ARE USING IN THIS CODE CHUNK library(nameofpackage)
+
+
+library(tidyverse)
+library(ggdag) # To dagify and plot our DAG objects in R
+library(dagitty) 
+
+```
+
+### Task 1 - The Potential Outcomes Framework [7 points in total]
+
+A research group is interested in the effects of coffee on the average performance of students. The researchers asked 200 of their students whether they had consumed coffee before the exam.  
+
+After compiling the data, they claim that **drinking coffee before an exam leads to an average increase of 7 points in the students' grade.** 
+
+You are a bit skeptical of the results. Fortunately for you, in this reality, you can observe the potential outcomes of 200 students under the two states of interest. In other words, you have data for the expected scores of students when they drink coffee before the exam $(coffee=1)$, as well as when they do not drink coffee before the exam $(coffee=0)$.
+
+| Treatment state (D)  | Share of students | E($Y^1$) | E($Y^0$) |
+|----------------------|:-----------------:|:------:|--------|
+| Treatment (Coffee=1) |        50%        |   95   |   93   |
+| Control (Coffee=0)   |        50%        |   92   |   88   |
+
+
+a)  Using `R` as a calculator, find the:
+
+- Naive average treatment effect (NATE) [0.5 points]
+
+```{r}
+NATE <- 95-88
+NATE
+
+```
+
+
+
+- Average treatment effect (ATE) [0.5 points]
+
+```{r}
+
+ATE <- 95-92
+ATE
+```
+
+- Average treatment effect for the treated (ATT) [0.5 points]
+
+```{r}
+
+ATT <- 95-93
+ATT
+```
+
+- Average treatment effect for the control (ATC) [0.5 points]
+
+```{r}
+ATC <- 92-88
+ATC
+```
+  
+- Selection, or baseline, bias [1 point]
+
+
+```{r}
+SB<- 93-88
+SB
+```
+
+
+- Differential treatment effect, or heterogeneous treatment effect, bias [2 points]
+
+```{r}
+HTE <- (1-.5)*(2-4)
+HTE
+```
+
+b) Discuss whether in a world with complete information about the potential outcomes your conclusions differ from those of the research team. [2 points]
+
+<!-- DO NOT FORGET PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+In a world with complete information we are able to know the individual treatment effect (ITE) of each person involved in an observable study. This means we would know the outcome for the individual if they were given the treatment, and if they were not given the treatment.  Of course, this is not possible because a person can either receive or not receive treatment.Additionally we would know the ATE and ATT of the treatment groups.Therefore, researchers are forced to make estimations about potential outcomes, in which they only know the value of the NATE. The conclusions in a perfect world show that the ATE is 3 while the ATT is 2. However, our researchers only have access to the NATE, which is 7. The difference between the NATE and ATE show that our researchers have different conclusions than those in a world with complete information. Additionally we can see that there is a baseline bias of 5. 
+
+
+</div>
+
+---
+
+### Task 2 - Bringing it all together [8 points in total]
+
+A research group is interested in the effects that receiving a **private high school education** has on the students' **earnings**. 
+
+The researchers gathered the incomes for the 2020 tax-year of all 4000 high school gradutes of 2010 in the city of Shelbyville. They researchers claim that **attending a private high school results in an average increase of around €7400 of the yearly income of students.** 
+
+You are a bit skeptical of the results. Fortunately, you can observe the potential outcomes of 4000 students under the two states of interest. In other words, you have data for the expected incomes of students in a reality where they went to private school $(private=1)$, as well as one where they attended a public institution $(private=0)$.
+
+The data\footnote{These are simulated data.} are stored in the `earnings_df.dta` file and contain the following information:
+
+* `subject_id`: identification number for each student
+* `treatment_state`: binary marker for actual treatment state
+* `income_0`: potential income under (private=0)
+* `income_1`: potential income under (private=1)
+* `observed_income`: income observed in reality
+
+Complete the following tasks utilizing the `earnings_df.dta` and your newly attained data manipulation skills with `dplyr`:
+
+a)  Load the `earnings_df.dta` into an object called `earnings_df`. [0.5 points]
+
+```{r}
+library(haven)
+earnings_df <- read_dta("/Users/annachadwell/Desktop/Hertie/Stats II/01-assignment/earnings_df.dta")
+
+```  
+
+b)  Extract the following quantities of interest with `dplyr` functions. If the output is more than a single number, provide the first ten elements:
+
+  - Individual treatment effects (ITEs) [0.5 points]
+  
+```{r}
+ite <-earnings_df %>% 
+  dplyr::mutate(ite = income_1 - income_0)
+ite
+
+
+```  
+  
+  - Average treatment effect (ATE) [0.5 points]
+  
+```{r}
+
+earnings_df %>%
+  dplyr::mutate(ite = income_1 - income_0) %>%
+  dplyr::summarize(ate = mean(ite))
+
+```
+
+  - Average treatment effect for the treated (ATT) [0.5 points]
+  
+```{r}
+earnings_df %>%
+  dplyr::mutate(ite = income_1 - income_0) %>%
+  dplyr::filter(treatment_state == 1) %>% 
+  summarise(att= mean(ite))
+```
+
+  - Average treatment effect for the control (ATC) [0.5 points]
+
+```{r}
+earnings_df %>%
+  dplyr::mutate(ite = income_1 - income_0) %>%
+  dplyr::filter(treatment_state == 0) %>% 
+  summarise(atc= mean(ite))
+```  
+  
+  - Naive average treatment effect (NATE) [0.5 point]
+  
+```{r}
+earnings_df%>% filter(treatment_state == 1) %>% summarise(mean(observed_income)) -
+  earnings_df%>% filter(treatment_state == 0) %>% summarise(mean(observed_income))
+```
+
+
+  - Selection, or baseline, bias [1 point]
+  
+```{r}
+earnings_df%>% filter(treatment_state == 1) %>% summarise(mean(income_0)) -
+earnings_df%>% filter(treatment_state == 0) %>% summarise(mean(income_0)) 
+```
+
+  - Differential treatment effect, or heterogeneous treatment effect, bias [1 points]
+
+```{r}
+table(earnings_df$treatment_state)
+
+#.25 of students were in the treatment group 
+#1-proportion of the treatment group = .75
+
+ATT_ATC <- earnings_df %>% filter(treatment_state == 1) %>% summarise(att= mean(income_1 - income_0)) - 
+  earnings_df %>% filter(treatment_state == 0) %>% summarise(atc= mean(income_1-income_0))
+
+HTE <- .75*ATT_ATC
+
+HTE
+```
+
+
+c) Discuss whether in a world with complete information about the potential outcomes your conclusions differ from those of the research team. [1 point]
+
+<!-- DO NOT FORGET PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+The case of these researchers is similar to the case from question 1. In a world with complete information, the researchers would know that the ATE is 4339 and the ATT is 3962. However, the researchers only have access to the NATE, which is 7407. This is clearly different than the ATE. For researchers it is ideal that your NATE would equal your ATE, to be able to make the assumption that your variable has an effect on the outcome. However, with such differences between the ATE and NATE, we cannot say that our research team has reached correct conclusions about private vs public education effecting an individuals income. 
+
+
+</div> 
+
+
+d) Develop an alternative theory about the observed differences between private and public school students' incomes. Write a short paragraph about what you suspect can be behind the observed results and formalize your assumptions in a Directed Acyclic Graph (DAG). [2 points] 
+
+<!-- DO NOT FORGET PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+
+An alternate theory for the observed differences between private and public school students' income could be an individual's gender. For the purpose of this example, we will assume gender is binary, male and female. I suspect that gender is a con-founder on the results, so that an individual's gender will impact their income directly, and also influence their income in addition to their attendance of private/public school. My assumption can be seen in the DAG below. 
+
+
+</div> 
+
+
+```{r}
+
+coord_dag <- list(
+  x = c(d = 0,  f = 1 , y = 2),
+  y = c(d = 0,  f = 1,  y = 0)
+)
+
+our_dag <- ggdag::dagify(d ~ f, 
+                         y ~ d, 
+                         y ~ f , 
+                         coords = coord_dag, 
+                         exposure = "d", 
+                         outcome = "y")
+
+ggdag::ggdag(our_dag) + 
+  theme_dag() 
+```  
+
+
+---
+
+### Task 3 - Confounders [3 points in total]
+
+```{r, echo = F, out.width="80%", fig.align="center"}
+knitr::include_graphics("https://user-images.githubusercontent.com/54796579/155166908-5751768c-091e-4da8-a1d9-d65f93421bf0.png") #this chunk is just to upload the image we provided
+```
+
+The scatterplot shows the relationship between the average weight and daily sleep of 1000 pets. An online site is using this plot to advertise their new supplement, *Life - Survival Shield X-2*. The owner of the site, Alex, claims that the supplement can help owners manage the weight of the pets by controling their sleep cycle. 
+
+a) Load the `animals_df.csv` into an object called `animals_df` and present a similar scatterplot with an additional dimension — `animal` — as the color argument in `ggplot2` Make sure the graph is easy to read by formatting it nicely. [1 point]
+
+```{r}
+
+library(haven)
+animals_df <- read_csv("/Users/annachadwell/Desktop/Hertie/Stats II/01-assignment/animals_df.csv")
+
+
+ggplot(animals_df, aes(x = weight, y = daily_sleep, color = animal)) + 
+  geom_point(color = "grey60") +
+  geom_smooth(method = "lm", se = F, color = "#CC0055") + #this adds a line, spefically linear, no se bc its false
+  theme_minimal() + #grey background
+  labs(x = "Weight",
+       y = "Sleep")
+
+
+ggplot(animals_df, aes(x = weight, y = daily_sleep, color = as.factor(animal))) + 
+  geom_point(alpha = 0.3) +
+  theme_minimal() +
+  labs(x = "Weight in grams",
+       y = "Sleep",
+       color = "Animal") +
+  theme(legend.position = "bottom")
+
+
+```
+
+b) Provide a brief explanation of how this relationship may be subject to **omitted variable bias** and lay it out in DAG form with `ggdag`. [2 points]
+
+<!-- DO NOT FORGET PUT YOUR ANSWER IN THE TAG DOWN THERE -->
+
+<div class = "answer"> 
+This relationship may be subject to omitted variable bias due to the lack of  control variables. The amount of sleep an animal gets will not be the only factor effecting the weight of animals. For example, the species of an animal will have an effect on the weight of an animal. Therefore, the current explanation between sleep and weight of animals is subject to omitted variable bias.
+
+</div>
+
+```{r}
+
+coord_dag <- list(
+  x = c(d = 0,  a = 1 , y = 2),
+  y = c(d = 0,  a = 1,  y = 0)
+)
+
+our_dag <- ggdag::dagify(d ~ a, 
+                         y ~ a, 
+                         y ~ d , 
+                         coords = coord_dag, 
+                         exposure = "d", 
+                         outcome = "y")
+
+ggdag::ggdag(our_dag) + 
+  theme_dag() # equivalent to theme_void()
+
+```
+
+---
+
+### Task 4 - Statistics inspired meme [1 bonus percentage point]
+
+a)  Create a stats-inspired meme using `memer` (or any other R meme dedicated  package) to earn one bonus percentage point. The meme should be related to one of the topics covered in the sessions this assignment is based on.
+
+
+
